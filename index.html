@@ -55,6 +55,16 @@
   .putar { width:28px; height:28px; border:3px solid var(--garis); border-top-color:var(--biru); border-radius:50%;
            margin:0 auto 12px; animation:p 1s linear infinite; }
   @keyframes p { to { transform:rotate(360deg); } }
+  details.aset summary { cursor:pointer; font-weight:600; font-size:16px; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+  details.aset summary::-webkit-details-marker { display:none; }
+  details.aset summary::after { content:'Lihat'; font-size:13px; font-weight:500; color:var(--biru); }
+  details.aset[open] summary::after { content:'Tutup'; }
+  table.aset { width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
+  table.aset th { text-align:left; font-size:12px; color:var(--abu); font-weight:600; padding:6px 4px; border-bottom:1px solid var(--garis); }
+  table.aset td { padding:7px 4px; border-bottom:1px solid var(--garis); vertical-align:top; }
+  table.aset .n { text-align:center; white-space:nowrap; width:56px; }
+  table.aset .kat { display:block; font-size:12px; color:var(--abu); }
+  table.aset .kurang { color:#991b1b; font-weight:700; }
   [hidden] { display:none !important; }
   footer { text-align:center; color:var(--abu); font-size:12px; margin:18px 0 8px; }
 </style>
@@ -83,6 +93,14 @@
       </dl>
     </div>
 
+    <details class="card aset" id="kartuAset" hidden>
+      <summary>Daftar aset ruangan (<span id="jmlAset">0</span>)</summary>
+      <table class="aset">
+        <thead><tr><th>Aset</th><th class="n">Standar</th><th class="n">Baik</th></tr></thead>
+        <tbody id="daftarAset"></tbody>
+      </table>
+    </details>
+
     <div class="card">
       <h2>Laporan yang sedang ditangani (<span id="jmlLap">0</span>)</h2>
       <div class="kosong" id="lapKosong">Tidak ada laporan terbuka untuk ruangan ini.</div>
@@ -104,7 +122,7 @@
       <label for="identitas">NIM / NIDN / NIK Pegawai <span class="hint">(angka saja)</span></label>
       <input type="text" id="identitas" inputmode="numeric" maxlength="20">
 
-      <label>Fasilitas yang rusak <span class="hint">(boleh lebih dari satu)</span></label>
+      <label>Aset / fasilitas yang rusak <span class="hint">(boleh lebih dari satu)</span></label>
       <div class="pilihan grid2" id="fasilitas"></div>
       <input type="text" id="lainnya" maxlength="100" placeholder="Lainnya (opsional)">
 
@@ -204,12 +222,29 @@
       $('daftarLap').appendChild(li);
     });
 
+    var aset = d.aset || [];
+    if (aset.length) {
+      $('jmlAset').textContent = aset.length;
+      aset.forEach(function (x) {
+        var tr = document.createElement('tr');
+        var td1 = document.createElement('td'); td1.textContent = x.nama;
+        if (x.kategori) { var k = document.createElement('span'); k.className = 'kat'; k.textContent = x.kategori; td1.appendChild(k); }
+        var td2 = document.createElement('td'); td2.className = 'n'; td2.textContent = x.standar === '' ? '-' : x.standar;
+        var td3 = document.createElement('td'); td3.className = 'n'; td3.textContent = x.baik === '' ? '-' : x.baik;
+        if (x.baik !== '' && x.standar !== '' && x.baik < x.standar) td3.className += ' kurang';
+        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+        $('daftarAset').appendChild(tr);
+      });
+      $('kartuAset').hidden = false;
+    }
+
     if (d.linkCek && /^https:\/\/docs\.google\.com\//.test(d.linkCek)) {
       $('linkCek').href = d.linkCek; $('linkCek').hidden = false;
     }
 
     buatPilihan('statusPelapor', 'statusPelapor', CFG.statusPelapor, 'radio');
     buatPilihan('fasilitas', 'fasilitas', CFG.fasilitas, 'checkbox');
+    if (CFG.dariAset) $('fasilitas').classList.remove('grid2');  // nama aset bisa panjang: satu kolom
     buatPilihan('tingkat', 'tingkat', CFG.tingkat, 'radio');
 
     $('memuat').hidden = true; $('isi').hidden = false;
