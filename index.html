@@ -65,6 +65,25 @@
   table.aset .n { text-align:center; white-space:nowrap; width:56px; }
   table.aset .kat { display:block; font-size:12px; color:var(--abu); }
   table.aset .kurang { color:#991b1b; font-weight:700; }
+  ul.lap a { color:inherit; text-decoration:none; display:block; }
+  ul.lap a:hover b { text-decoration:underline; }
+  .cek-baris { display:flex; gap:8px; }
+  .cek-baris input { flex:1; text-transform:uppercase; }
+  .cek-baris button { width:auto; padding:10px 16px; font-size:15px; }
+  ol.alur { list-style:none; margin:14px 0 0; padding:0; }
+  ol.alur li { position:relative; padding:0 0 14px 26px; font-size:14px; }
+  ol.alur li::before { content:''; position:absolute; left:4px; top:4px; width:12px; height:12px; border-radius:50%;
+                       background:#fff; border:2px solid #d1d5db; }
+  ol.alur li::after { content:''; position:absolute; left:10px; top:20px; bottom:0; width:2px; background:#e5e7eb; }
+  ol.alur li:last-child::after { display:none; }
+  ol.alur li.ok::before { background:var(--biru); border-color:var(--biru); }
+  ol.alur .tgl { display:block; color:var(--abu); font-size:12px; }
+  .kotak { background:#f9fafb; border:1px solid var(--garis); border-radius:8px; padding:10px 12px; font-size:14px; margin-top:12px; }
+  .kotak b { display:block; font-size:12px; color:var(--abu); font-weight:600; margin-bottom:2px; }
+  .duatombol { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .tolak { background:#991b1b; }
+  dl.detail { grid-template-columns:auto 1fr; }
+  dl.detail dd { word-break:break-word; }
   [hidden] { display:none !important; }
   footer { text-align:center; color:var(--abu); font-size:12px; margin:18px 0 8px; }
 </style>
@@ -146,11 +165,57 @@
       <h2>Laporan terkirim</h2>
       <div>Nomor laporan Anda:</div>
       <div class="id" id="idLaporan"></div>
-      <div class="meta">Simpan nomor ini. Status penanganan dapat dilihat dengan memindai QR code ruangan ini kembali.</div>
+      <div class="meta">Simpan nomor ini (screenshot halaman ini) untuk memantau perkembangan laporan Anda.</div>
+      <br><a class="btn" id="linkPantau" href="#">Pantau laporan ini</a>
     </div>
 
     <a class="btn sekunder" id="linkCek" hidden>Log Cek Rutin (khusus petugas)</a>
   </div>
+
+  <!-- Pantau laporan (pelapor) -->
+  <div id="viewPantau" hidden>
+    <div class="card">
+      <div class="kode" id="pId"></div>
+      <h1 id="pAset"></h1>
+      <div class="meta" id="pRuang"></div>
+      <span class="status" id="pStatus"></span>
+      <ol class="alur" id="pAlur"></ol>
+      <div class="kotak" id="pDiagnosa" hidden><b>Hasil pemeriksaan petugas</b><span></span></div>
+      <div class="kotak" id="pTarget" hidden><b>Perkiraan selesai</b><span></span></div>
+      <div class="kotak" id="pHasil" hidden><b>Hasil perbaikan</b><span></span></div>
+    </div>
+    <a class="btn sekunder" id="pKembali" href="#">Lihat halaman ruangan</a>
+  </div>
+
+  <!-- Persetujuan koordinator -->
+  <div id="viewSetuju" hidden>
+    <div class="card">
+      <div class="kode">PERSETUJUAN PERBAIKAN</div>
+      <h1 id="sJudul"></h1>
+      <div class="meta" id="sRuang"></div>
+      <dl class="detail" id="sDetail"></dl>
+    </div>
+    <form class="card" id="sForm" hidden novalidate>
+      <h2>Keputusan Koordinator</h2>
+      <label for="sCatatan">Catatan <span class="hint">(wajib jika tidak disetujui)</span></label>
+      <textarea id="sCatatan" maxlength="500" placeholder="Contoh: Setuju, gunakan anggaran pemeliharaan. / Tunda ke semester depan."></textarea>
+      <div class="galat" id="sGalat"></div>
+      <div class="duatombol">
+        <button type="button" class="tolak" id="sTolak">Tidak Disetujui</button>
+        <button type="button" id="sSetuju">Setujui</button>
+      </div>
+    </form>
+    <div class="card" id="sSudah" hidden><h2 id="sSudahJudul"></h2><div class="meta" id="sSudahIsi"></div></div>
+  </div>
+
+  <!-- Cek status laporan -->
+  <form class="card" id="kartuCek" hidden novalidate>
+    <h2>Cek status laporan</h2>
+    <div class="cek-baris">
+      <input type="text" id="cekId" placeholder="LK-2611-0001" maxlength="12" autocomplete="off">
+      <button type="submit">Cek</button>
+    </div>
+  </form>
 
   <footer>Sistem Monitoring Aset Ruangan</footer>
 </div>
@@ -191,11 +256,7 @@
   }
 
   function render(d) {
-    $('kepala').innerHTML = '';
-    var b = document.createElement('b'); b.textContent = d.institusi || '';
-    $('kepala').appendChild(b);
-    if (d.unit) $('kepala').appendChild(document.createTextNode(' · ' + d.unit));
-
+    kepala(d);
     if (!d.ruang) return tampilTidakAda();
     CFG = d.cfg;
     document.title = d.ruang.id + ' - ' + d.ruang.nama;
@@ -218,7 +279,9 @@
       var f = document.createElement('b'); f.textContent = x.fasilitas;
       var m = document.createElement('span'); m.className = 'meta';
       m.textContent = x.tanggal + ' · ' + x.id + (x.prioritas === 'Darurat' ? ' · Darurat' : '');
-      li.appendChild(st); li.appendChild(f); li.appendChild(document.createElement('br')); li.appendChild(m);
+      var a = document.createElement('a'); a.href = '?lapor=' + encodeURIComponent(x.id);
+      a.appendChild(st); a.appendChild(f); a.appendChild(document.createElement('br')); a.appendChild(m);
+      li.appendChild(a);
       $('daftarLap').appendChild(li);
     });
 
@@ -247,17 +310,125 @@
     if (CFG.dariAset) $('fasilitas').classList.remove('grid2');  // nama aset bisa panjang: satu kolom
     buatPilihan('tingkat', 'tingkat', CFG.tingkat, 'radio');
 
-    $('memuat').hidden = true; $('isi').hidden = false;
+    $('memuat').hidden = true; $('isi').hidden = false; $('kartuCek').hidden = false;
   }
 
-  if (!idRuang) {
-    tampilTidakAda('Pindai QR code ruangan', 'Halaman ini dibuka dengan memindai QR code yang tertempel di pintu ruangan.');
-  } else {
-    panggil(API + '?api=ruang&r=' + encodeURIComponent(idRuang))
-      .then(render)
-      .catch(function () {
-        tampilTidakAda('Gagal memuat data', 'Periksa koneksi internet Anda, lalu coba lagi.', true);
+  function kepala(d) {
+    $('kepala').innerHTML = '';
+    var b = document.createElement('b'); b.textContent = d.institusi || '';
+    $('kepala').appendChild(b);
+    if (d.unit) $('kepala').appendChild(document.createTextNode(' · ' + d.unit));
+  }
+  function gagalMuat() { tampilTidakAda('Gagal memuat data', 'Periksa koneksi internet Anda, lalu coba lagi.', true); }
+  function kelasStatus(l) {
+    if (l.status === 'Selesai') return 'hijau';
+    if (l.tutup) return 'abu';
+    return 'kuning';
+  }
+  function isiKotak(id, teks) { if (teks) { $(id).querySelector('span').textContent = teks; $(id).hidden = false; } }
+  function rupiah(n) { return n === '' || n === null ? '-' : 'Rp ' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  // ---------- Pantau laporan ----------
+  function renderPantau(res) {
+    if (res.institusi) kepala(res);
+    if (!res.ok) { tampilTidakAda('Laporan tidak ditemukan', res.error); $('kartuCek').hidden = false; return; }
+    var l = res.laporan;
+    document.title = 'Status ' + l.id;
+    $('pId').textContent = l.id;
+    $('pAset').textContent = l.fasilitas;
+    $('pRuang').textContent = l.ruangId + ' – ' + l.ruangNama;
+    $('pStatus').textContent = l.keterangan;
+    $('pStatus').className = 'status s-' + kelasStatus(l);
+    l.tahapan.forEach(function (t) {
+      var li = document.createElement('li'); if (t.ok) li.className = 'ok';
+      li.appendChild(document.createTextNode(t.label));
+      var tg = document.createElement('span'); tg.className = 'tgl'; tg.textContent = t.ok ? t.tanggal : 'menunggu';
+      li.appendChild(tg); $('pAlur').appendChild(li);
+    });
+    isiKotak('pDiagnosa', l.diagnosa);
+    isiKotak('pTarget', l.target);
+    isiKotak('pHasil', l.hasilPerbaikan);
+    $('pKembali').href = '?r=' + encodeURIComponent(l.ruangId);
+    $('memuat').hidden = true; $('viewPantau').hidden = false; $('kartuCek').hidden = false;
+  }
+
+  // ---------- Persetujuan koordinator ----------
+  var setujuId = '', setujuK = '';
+  function renderSetuju(res) {
+    if (res.institusi) kepala(res);
+    if (!res.ok) return tampilTidakAda('Laporan tidak ditemukan', res.error);
+    if (!res.detail) return tampilTidakAda('Link tidak sah', 'Gunakan link persetujuan dari email notifikasi.');
+    var l = res.laporan, d = res.detail;
+    document.title = 'Persetujuan ' + l.id;
+    $('sJudul').textContent = l.id + ' – ' + l.fasilitas;
+    $('sRuang').textContent = l.ruangId + ' – ' + l.ruangNama;
+    var baris = [
+      ['Keluhan pelapor', d.deskripsi], ['Tingkat', d.tingkat + ' (' + d.prioritas + ')'],
+      ['Diperiksa oleh', d.pic], ['Diagnosa', l.diagnosa], ['Penanganan', d.jenis],
+      ['Kebutuhan', d.kebutuhan || '-'], ['Perkiraan biaya', rupiah(d.biaya)], ['Target selesai', d.targetSelesai || '-']
+    ];
+    baris.forEach(function (b) {
+      var dt = document.createElement('dt'); dt.textContent = b[0];
+      var dd = document.createElement('dd'); dd.textContent = b[1] || '-';
+      $('sDetail').appendChild(dt); $('sDetail').appendChild(dd);
+    });
+    [['Foto laporan', d.fotoBukti], ['Foto pemeriksaan', d.fotoPemeriksaan]].forEach(function (f) {
+      if (!/^https:\/\//.test(f[1])) return;
+      var dt = document.createElement('dt'); dt.textContent = f[0];
+      var dd = document.createElement('dd'); var a = document.createElement('a');
+      a.href = f[1].split(',')[0].trim(); a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Buka foto';
+      dd.appendChild(a); $('sDetail').appendChild(dt); $('sDetail').appendChild(dd);
+    });
+    if (d.menunggu) { $('sForm').hidden = false; }
+    else {
+      $('sSudahJudul').textContent = d.keputusan ? 'Sudah diputuskan: ' + d.keputusan : 'Tidak menunggu persetujuan';
+      $('sSudahIsi').textContent = d.catatanKeputusan || ('Status saat ini: ' + l.status);
+      $('sSudah').hidden = false;
+    }
+    $('memuat').hidden = true; $('viewSetuju').hidden = false;
+  }
+  function putuskan(keputusan) {
+    var catatan = $('sCatatan').value.trim(), g = $('sGalat');
+    g.style.display = 'none';
+    if (keputusan === 'Tolak' && catatan.length < 5) { g.textContent = 'Tuliskan alasan jika tidak disetujui.'; g.style.display = 'block'; return; }
+    $('sSetuju').disabled = $('sTolak').disabled = true;
+    panggil(API, { method: 'POST', body: JSON.stringify({ aksi: 'persetujuan', id: setujuId, k: setujuK, keputusan: keputusan, catatan: catatan }) })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.error);
+        $('sForm').hidden = true;
+        $('sSudahJudul').textContent = keputusan === 'Setujui' ? 'Perbaikan disetujui' : 'Perbaikan tidak disetujui';
+        $('sSudahIsi').textContent = 'Keputusan tersimpan dan tim teknisi sudah diberi tahu.';
+        $('sSudah').hidden = false;
+      })
+      .catch(function (err) {
+        $('sSetuju').disabled = $('sTolak').disabled = false;
+        g.textContent = err.message || 'Gagal menyimpan keputusan.'; g.style.display = 'block';
       });
+  }
+  $('sSetuju').onclick = function () { putuskan('Setujui'); };
+  $('sTolak').onclick = function () { putuskan('Tolak'); };
+
+  // ---------- Cek status ----------
+  $('kartuCek').onsubmit = function (ev) {
+    ev.preventDefault();
+    var id = $('cekId').value.trim().toUpperCase();
+    if (id) location.search = '?lapor=' + encodeURIComponent(id);
+  };
+
+  // ---------- Routing ----------
+  var Q = new URLSearchParams(location.search);
+  if (Q.get('persetujuan')) {
+    setujuId = Q.get('persetujuan').trim().toUpperCase(); setujuK = Q.get('k') || '';
+    panggil(API + '?api=laporan&id=' + encodeURIComponent(setujuId) + '&k=' + encodeURIComponent(setujuK))
+      .then(renderSetuju).catch(gagalMuat);
+  } else if (Q.get('lapor')) {
+    panggil(API + '?api=laporan&id=' + encodeURIComponent(Q.get('lapor').trim()))
+      .then(renderPantau).catch(gagalMuat);
+  } else if (!idRuang) {
+    tampilTidakAda('Monitoring Aset Ruangan', 'Pindai QR code di pintu ruangan untuk melihat status ruangan dan melapor kerusakan, atau masukkan nomor laporan Anda di bawah ini.');
+    $('kartuCek').hidden = false;
+  } else {
+    panggil(API + '?api=ruang&r=' + encodeURIComponent(idRuang)).then(render).catch(gagalMuat);
   }
 
   // ---------- Form laporan ----------
@@ -331,6 +502,7 @@
       if (!res.ok) return gagalKirim(res.error || 'Laporan gagal dikirim.');
       $('formLapor').hidden = true;
       $('idLaporan').textContent = res.id;
+      $('linkPantau').href = '?lapor=' + encodeURIComponent(res.id);
       $('sukses').hidden = false;
       $('sukses').scrollIntoView({ behavior: 'smooth' });
     }).catch(function (err) {
